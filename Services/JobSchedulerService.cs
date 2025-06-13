@@ -1,59 +1,53 @@
-using Quartz;
+using JobScheduler.Models;
+using System.Collections.Concurrent;
 
-public class JobSchedulerService
+namespace JobScheduler.Services
 {
-    private readonly ISchedulerFactory _schedulerFactory;
-
-    public JobSchedulerService(ISchedulerFactory schedulerFactory)
+    public class JobSchedulerService
     {
-        _schedulerFactory = schedulerFactory;
-    }
+        private readonly ConcurrentBag<(string Type, JobScheduleConfig Config)> _jobs = new();
+        private readonly ConcurrentDictionary<string, DateTime> _lastRunTimes = new();
 
-    public async Task<string> ScheduleJobAsync(string type, JobScheduleConfig config)
-    {
-        var scheduler = await _schedulerFactory.GetScheduler();
-        string jobId = Guid.NewGuid().ToString();
-
-        var job = JobBuilder.Create<HelloWorldJob>()
-            .WithIdentity(jobId)
-            .Build();
-
-        // Validate inputs here (optional, recommended)
-        ValidateConfig(type, config);
-
-        string cronExpression = type.ToLower() switch
+        public void ScheduleJob(string type, JobScheduleConfig config)
         {
-            "hourly" => $"0 {config.Minute} * ? * *",
-            "daily" => $"0 {config.Minute} {config.Hour} ? * *",
-            "weekly" => $"0 {config.Minute} {config.Hour} ? * {config.DayOfWeek?.ToUpper()}",
-            _ => throw new ArgumentException("Invalid schedule type")
-        };
-
-        var trigger = TriggerBuilder.Create()
-            .WithIdentity($"{jobId}-trigger")
-            .WithCronSchedule(cronExpression)
-            .Build();
-
-        await scheduler.ScheduleJob(job, trigger);
-        return jobId;
-    }
-
-    private void ValidateConfig(string type, JobScheduleConfig config)
-    {
-        if (config.Minute < 0 || config.Minute > 59)
-            throw new ArgumentException("Minute must be between 0 and 59");
-
-        if (type.ToLower() == "daily" || type.ToLower() == "weekly")
-        {
-            if (config.Hour < 0 || config.Hour > 23)
-                throw new ArgumentException("Hour must be between 0 and 23");
+            ValidateConfig(type.ToLower(), config);
+            _jobs.Add((type.ToLower(), config));
         }
 
-        if (type.ToLower() == "weekly")
+        public IEnumerable<(string Type, JobScheduleConfig Config)> GetJobs() => _jobs;
+
+        public bool ShouldRun(string jobKey)
         {
-            var validDays = new HashSet<string> { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" };
-            if (string.IsNullOrEmpty(config.DayOfWeek) || !validDays.Contains(config.DayOfWeek.ToUpper()))
-                throw new ArgumentException("DayOfWeek must be one of SUN, MON, TUE, WED, THU, FRI, SAT");
+            if (_lastRunTimes.TryGetValue(jobKey, out var lastRun))
+            {
+                var now = DateTime.Now;
+                if (lastRun.Minute == now.Minute && lastRun.Hour == now.Hour && lastRun.Date == now.Date)
+                {
+                    return false;
+                }
+            }
+
+            _lastRunTimes[jobKey] = DateTime.Now;
+            return true;
+        }
+
+        private void ValidateConfig(string type, JobScheduleConfig config)
+        {
+            if (config.Minute < 0 || config.Minute > 59)
+                throw new ArgumentException("Minute must be between 0 and 59");
+
+            if (type == "daily" || type == "weekly")
+            {
+                if (config.Hour < 0 || config.Hour > 23)
+                    throw new ArgumentException("Hour must be between 0 and 23");
+            }
+
+            if (type == "weekly")
+            {
+                var validDays = new[] { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" };
+                if (string.IsNullOrWhiteSpace(config.DayOfWeek) || !validDays.Contains(config.DayOfWeek.ToUpper()))
+                    throw new ArgumentException("Invalid DayOfWeek");
+            }
         }
     }
 }

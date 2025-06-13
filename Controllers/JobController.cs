@@ -1,7 +1,11 @@
+using JobScheduler.Models;
+using JobScheduler.Services;
 using Microsoft.AspNetCore.Mvc;
 
+namespace JobScheduler.Controllers;
+
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/job")]
 public class JobController : ControllerBase
 {
     private readonly JobSchedulerService _jobService;
@@ -12,12 +16,12 @@ public class JobController : ControllerBase
     }
 
     [HttpPost("{type}")]
-    public async Task<IActionResult> Schedule(string type, [FromBody] JobScheduleConfig config)
+    public IActionResult Schedule(string type, [FromBody] JobScheduleConfig config)
     {
         try
         {
-            var jobId = await _jobService.ScheduleJobAsync(type, config);
-            return Ok(new { message = "Job scheduled", jobId });
+            _jobService.ScheduleJob(type, config);
+            return Ok(new { message = $"Job scheduled as {type}" });
         }
         catch (Exception ex)
         {
@@ -25,4 +29,3 @@ public class JobController : ControllerBase
         }
     }
 }
-
