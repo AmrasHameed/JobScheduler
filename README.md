@@ -1,7 +1,7 @@
-## JobScheduler (.NET + Quartz)
+## JobScheduler (.NET)
 
 This is a simple job scheduling system built with **ASP.NET Core Web API** and **Quartz.NET**.  
-It allows scheduling recurring jobs like printing `"Hello World"` at specified intervals — hourly, daily, or weekly.
+It allows scheduling recurring jobs like printing `"Executed"` at specified intervals — hourly, daily, or weekly.
 
 ##  Features
 
